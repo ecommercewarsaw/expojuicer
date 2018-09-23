@@ -30,24 +30,26 @@ export const validateToken = token => {
 };
 
 
-export const lsGet = key => JSON.parse(localStorage.getItem(key))
+export const lsGet = (key, ifNotFound = "") => {
+  try {
+    const data = localStorage.getItem(key)
+    return data ? JSON.parse(data) : ifNotFound
+  } catch (error) {
+    return ifNotFound
+  }
+}
+
+
 export const lsSet = (key, value) => localStorage.setItem(key, JSON.stringify(value))
 
 export const getLocale = () => {
   return lsGet("locale") || process.env.REACT_APP_LOCALE || "en"
 }
 
-export const storeUserData = (token, profile) => {
-  lsSet("token", token)
-  lsSet('profile', profile)
-};
-
-
 export const getToken = () => {
   const token = lsGet('token');
   return validateToken(token) ? token : false;
 };
-
 
 export const getUserData = (path, replacement) => {
   const profile = lsGet("profile");
@@ -57,11 +59,67 @@ export const getUserData = (path, replacement) => {
 export const clearUserData = () => {
   localStorage.removeItem('profile');
   localStorage.removeItem('token');
+  localStorage.removeItem('permissions');
 };
 
+export const timestamp = () => Math.floor(Date.now() / 1000)
 
+export const updatePerms = (redirectTo = "") => rawFetchApi("/settings", null, (data) => { 
+  if(!"account-modules" in data){
+    return false
+  }
+  
+  //save locale only when we dont have local one!
+  if("lang" in data && data.lang.length){
+    lsSet("locale", data.lang)
+  }
 
-export const refreshUserData = (token = getToken()) => {
+  lsSet("permissions", data["account-modules"]);
+  lsSet("permissions_checked",  timestamp() );
+  return data["account-modules"];
+
+}, redirectTo);
+
+export const hasAccessTo = (perms, strOrArr, action) => {
+
+  if(perms === undefined){
+    return false;
+  }
+
+  if(perms && perms.trim() === "*"){
+    return true;
+  }
+
+  return [].concat(strOrArr).some(asset => perms.indexOf(asset) > -1 )
+}
+
+export const checkAccessFor = (redirectTo) => {
+  const permissions = lsGet("permissions");
+  const lastCheck = lsGet("permissions_checked", 0);
+
+  //use cache perms for max 1 hr
+  if(permissions && timestamp() - lastCheck < 3600)
+  {
+    //moved to AUTH SAGA
+    //updatePerms();
+    return Promise.resolve(permissions);
+  }
+  return updatePerms(redirectTo);
+}
+
+export const refreshUserData = (newToken = null) => rawFetchApi("/me", newToken, (data) => {
+ 
+  if(newToken){
+    lsSet("token", newToken);
+  }
+  lsSet('profile', data);
+  return true;
+});
+
+export const rawFetchApi = (endpoint, newToken, onSuccess, redirectTo = "/login") => {
+  
+  const token = newToken || getToken();
+  
   const options = {
     headers: new Headers({
       Accept: 'application/json',
@@ -70,19 +128,25 @@ export const refreshUserData = (token = getToken()) => {
   };
 
   return fetchUtils
-    .fetchJson(`${process.env.REACT_APP_API_ENDPOINT}/me`, options)
+    .fetchJson(`${process.env.REACT_APP_API_ENDPOINT}${endpoint}`, options)
     .then(response => {
-      if ('data' in response.json) {
-        storeUserData(token, response.json.data);
-        return Promise.resolve();
+
+      if (!'data' in response.json) {
+        return Promise.reject({ redirectTo });
       }
 
-      return Promise.reject('Bad API answer.');
+      if(typeof onSuccess === "function"){
+        const c = onSuccess(response.json.data)
+        if(c === false){
+          return Promise.reject({ redirectTo });
+        }
+        return Promise.resolve(c);
+      }
+
+      return Promise.resolve();
     });
+
 };
-
-
-
 
 
 export const getUserFullName = () => {
