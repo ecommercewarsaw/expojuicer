@@ -1,57 +1,57 @@
 import React from 'react'
-import RaisedButton from 'material-ui/RaisedButton';
 import {
     translate
 } from 'admin-on-rest';
-import {Cart, Check} from 'mdi-material-ui'
-import {upgradeCreate} from '../../redux/actions';
+import RaisedButton from 'material-ui/RaisedButton';
+import {Cart} from 'mdi-material-ui'
 import {connect} from 'react-redux'
 import compose from 'recompose/compose'
+import {showModal} from '../../redux/actions';
+import QuantityBox from './QuantityBox'
 
 class BuyAction extends React.Component {
 
     handleClick = () => {
 
-        const {upgradeCreate, data} = this.props;
+        const {showModal, data, translate} = this.props;
 
-        upgradeCreate({
-            ticket_id: data.id
-        });
+        showModal({
+            title: translate("resources.upgrades.dialog"),
+            body: <QuantityBox data={data} />,
+        })
 
-    }
-
-    renderDisabled(reason){
-        const {translate, resource} = this.props
-
-        return  <RaisedButton
-            disabled={true}
-            primary
-            label={translate(`common.statuses.${reason}`)}
-            icon={<Check />}
-           
-          />
     }
 
     render(){
 
-        const {translate, resource, data} = this.props
+        const {translate, data} = this.props    
 
-        if("bookable" in data && !data.bookable){
-            return this.renderDisabled("unavailable");
+        if("bookable" in data && data.bookable > 0){
+                
+            return  (<RaisedButton
+                primary
+                label={
+                    ("booked" in data && data.booked > 0) ? 
+                    translate(`common.statuses.buy_more`) :
+                    translate(`common.statuses.buy`)
+                }
+                icon={<Cart />}
+                onClick={this.handleClick}
+                />
+            )
+
+        }
+        else{
+            
+            return  (<RaisedButton
+                disabled={true}
+                primary
+                label={translate(`common.statuses.unavailable`)}
+                icon={<Cart />}
+              />)
+            
         }
 
-        if("booked" in data && data.booked){
-            return this.renderDisabled("already_bought");
-        }
-
-        return (
-            <RaisedButton
-            primary
-            label={translate(`common.actions.buy`)}
-            icon={<Cart />}
-            onClick={this.handleClick}
-          />
-        )
     }
 
 }
@@ -62,7 +62,7 @@ BuyAction.defaultProps = {
 
 const enhance = compose(
     translate,
-    connect(null, {upgradeCreate})
+    connect(null, {showModal})
 )
 
 export default enhance(BuyAction)
