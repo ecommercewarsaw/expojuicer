@@ -68,7 +68,13 @@ class QuantityBox extends React.Component {
 
         const {data, locale} = this.props
         const {itemsCount} = this.state;
-        const total = data.price.pl * itemsCount;
+
+
+        if(!(locale in data.price)){
+            return 'error';
+        }
+
+        const total = data.price[locale] * itemsCount;
 
         if(locale === "pl"){
             return `${total} PLN`;
